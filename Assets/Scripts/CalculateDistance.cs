@@ -45,7 +45,7 @@ public class CalculateDistance : MonoBehaviour
         lastLon = GPSManager.Instance.longitude;
         movedDistance = 0;
         isStarted = true;
-        UIManager.instance?.SetDistanceInfoMessage("시작 위치가 저장되었습니다. 이동을 시작하세요!");
+        //UIManager.instance?.SetDistanceInfoMessage("시작 위치가 저장되었습니다. 이동을 시작하세요!");
     }
 
     private float Haversine(float lat1, float lon1, float lat2, float lon2)

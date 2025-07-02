@@ -18,6 +18,7 @@ public class UIManager : MonoBehaviour
     public Text GPSText_UI;
     
     // 아이템 관련UI
+    public Image countBack;
     public Text itemText; 
     public Text completeText; // 완료시 텍스트 띄우기(다른거로 대체할 예정)
     
@@ -43,6 +44,8 @@ public class UIManager : MonoBehaviour
     {
         if (distanceInfoText != null)
             distanceInfoText.gameObject.SetActive(false);
+        if(countBack != null)
+            countBack.gameObject.SetActive(false);
         if (completeText != null)
             completeText.gameObject.SetActive(false);
         if (itemText != null)
@@ -68,6 +71,8 @@ public class UIManager : MonoBehaviour
     {
         dialogueFinished = true;
         // UI 활성화
+        if(countBack != null)
+            countBack.gameObject.SetActive(true);
         if (distanceInfoText != null)
             distanceInfoText.gameObject.SetActive(true);
         if (itemText != null)

@@ -35,7 +35,7 @@ public class CalculateDistance : MonoBehaviour
         lastLat = curLat;
         lastLon = curLon;
 
-        UIManager.instance?.UpdateInfoUI(movedDistance, targetDistance);
+        UIManager.instance?.UpdateInfoUI(movedDistance);
     }
 
     // 이 함수만 public으로, UIManager가 이걸 호출함

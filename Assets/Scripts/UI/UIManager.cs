@@ -94,14 +94,14 @@ public class UIManager : MonoBehaviour
             GPSText_UI.text = $"{lat} / {lon}";
         }
     }
-    public void UpdateInfoUI(float movedDistance, float targetDistance)
+    public void UpdateInfoUI(float movedDistance)
     {
         if (distanceInfoText == null) return;
-        distanceInfoText.text = $"이동 거리: {movedDistance:F1} m / {targetDistance} m";
-        if (movedDistance >= targetDistance)
-        {
-            distanceInfoText.text += targetDistance + "m 이동 성공!";
-        }
+        distanceInfoText.text = $"이동거리: {movedDistance:F1} m";
+        // if (movedDistance >= targetDistance)
+        // {
+        //     distanceInfoText.text += targetDistance + "m 이동 성공!";
+        // }
     }
     public void SetDistanceInfoMessage(string msg)
     {
@@ -111,7 +111,7 @@ public class UIManager : MonoBehaviour
     public void UpdateItemText(int getItemCount, int maxItemCount)
     {
         if (itemText != null)
-            itemText.text = $"획득 아이템 수 : {getItemCount}/ {maxItemCount}";
+            itemText.text = $"되찾은 물건 : {getItemCount} / {maxItemCount}";
         if (completeText != null)
             completeText.gameObject.SetActive(getItemCount == maxItemCount);
     }

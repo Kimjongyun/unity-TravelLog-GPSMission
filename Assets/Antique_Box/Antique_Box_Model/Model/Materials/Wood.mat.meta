@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 0dc377dd0df69c347903064a2aca2ae2
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 158633
+  packageName: Antique Puzzle Box
+  packageVersion: 1.0
+  assetPath: Assets/Antique_Box/Antique_Box_Model/Model/Materials/Wood.mat
+  uploadId: 341437

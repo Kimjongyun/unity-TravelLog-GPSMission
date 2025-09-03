@@ -5,122 +5,102 @@ using System.Collections;
 
 public class MissionManager : MonoBehaviour
 {
-    // --- UI 요소 연결 ---
     [Header("UI References")]
     public Button startMissionButton;
     public TextMeshProUGUI statusText;
-    public Slider progressBarSlider;
+
+    // Reach ProgressBar (그대로 사용)
+    public Michsky.UI.Reach.ProgressBar progressBar;
+
     public TextMeshProUGUI remainingDistanceText;
 
-    // --- GPS 좌표 설정 ---
     [Header("Mission Coordinates")]
-    [Tooltip("배달 시작 지점 (편의점)")]
-    // public Vector2 startLocationCoords = new Vector2(37.481185f, 126.960088f);
     public Vector2 startLocationCoords = new Vector2(37.477597f, 126.861248f);
-
-    [Tooltip("최종 목적지 (어떤 장소)")]
-    // public Vector2 destinationCoords = new Vector2(37.480628f, 126.959449f);
-    public Vector2 destinationCoords = new Vector2(37.477521f, 126.862443f);
+    public Vector2 destinationCoords   = new Vector2(37.477521f, 126.862443f);
 
     [Header("Mission Settings")]
     [Tooltip("도착 및 시작 반경 (미터)")]
     public float arrivalRadiusMeters = 10f;
 
-    // --- 내부 상태 관리 ---
-    private enum MissionState
-    {
-        InitializingGPS,       // GPS 초기화 중 (새로운 상태 추가)
-        Idle,                  // 미션 시작 전
-        GoToStartLocation,     // 배달 시작 지점으로 이동 중
-        DeliveryInProgress,    // 배달 진행 중
-        MissionCompleted       // 미션 완료
-    }
+    // ───── 추가: 토스트 & 도시락 이미지 ─────
+    [Header("Popup / Meal UI")]
+    public Image mealImage;                 // 도시락 이미지 (UI Image)
+    public TextMeshProUGUI popupText;      // 토스트 문구
+    public CanvasGroup popupGroup;         // 페이드용
+    public float popupDuration = 1.5f;     // 표시 유지 시간
+    public float popupFade = 0.25f;        // 페이드 인/아웃 시간
 
-    private MissionState currentMissionState = MissionState.InitializingGPS; // 초기 상태를 GPS 초기화 중으로 변경
-    private float initialDeliveryDistance; // 배달 시작 지점부터 최종 목적지까지의 초기 거리 (미터)
-    private bool hasMissionStarted = false; // 미션 시작 버튼 클릭 여부 (한 번만 시작되도록)
+    private enum MissionState { InitializingGPS, Idle, GoToStartLocation, DeliveryInProgress, MissionCompleted }
+    private MissionState currentMissionState = MissionState.InitializingGPS;
 
-    // 지구 반지름 (미터) - Haversine 공식에 사용
+    private float initialDeliveryDistance;
+    private bool hasMissionStarted = false;
+
     private const float EARTH_RADIUS_METERS = 6371000f;
+    private Coroutine popupCo;
 
     void Awake()
     {
-        // 버튼 클릭 이벤트 리스너 추가
         if (startMissionButton != null)
-        {
             startMissionButton.onClick.AddListener(OnStartMissionButtonClick);
-        }
+
+        // 초기 UI 안전값
+        if (mealImage != null) mealImage.gameObject.SetActive(false);
+        if (popupText != null) popupText.gameObject.SetActive(false);
+        if (popupGroup != null) popupGroup.alpha = 0f;
     }
 
     void Start()
     {
-        // 초기 UI 상태 설정 (GPS 초기화 중 메시지 표시)
         UpdateUIForCurrentState();
-        StartCoroutine(CheckGpsAndStartGame()); // GPS 상태를 확인하고 게임 시작 준비
+        StartCoroutine(CheckGpsAndStartGame());
     }
 
-    // GPS가 준비될 때까지 기다리는 코루틴
     IEnumerator CheckGpsAndStartGame()
     {
-        // GPSManager 인스턴스가 초기화될 때까지 기다림
         while (GPSManager.Instance == null)
         {
-            statusText.text = "GPS 시스템 초기화 중...";
+            if (statusText != null) statusText.text = "GPS 시스템 초기화 중...";
             yield return null;
         }
 
-        // GPS 상태가 Running이 될 때까지 기다림
         while (GPSManager.Instance.GetLocationStatus() != LocationServiceStatus.Running)
         {
-            LocationServiceStatus gpsStatus = GPSManager.Instance.GetLocationStatus();
+            var gpsStatus = GPSManager.Instance.GetLocationStatus();
             if (gpsStatus == LocationServiceStatus.Failed)
             {
-                statusText.text = "위치 정보 초기화에 실패했습니다. 위치 권한을 확인하고 앱을 재시작해 주세요.";
-                startMissionButton.interactable = false; // GPS 실패 시 버튼 비활성화
-                yield break; // 실패했으므로 코루틴 종료
+                if (statusText != null) statusText.text = "위치 정보 초기화에 실패했습니다. 위치 권한을 확인하고 앱을 재시작해 주세요.";
+                if (startMissionButton != null) startMissionButton.interactable = false;
+                yield break;
             }
-            statusText.text = $"위치 정보를 가져오는 중입니다... ({gpsStatus})";
+            if (statusText != null) statusText.text = $"위치 정보를 가져오는 중입니다... ({gpsStatus})";
             yield return null;
         }
 
-        // GPS가 정상적으로 작동할 때 Idle 상태로 전환
-        SetMissionState(MissionState.Idle); // GPS 준비 완료 후 Idle 상태로 전환
+        SetMissionState(MissionState.Idle);
     }
 
     void Update()
     {
-        // GPS 초기화 중이거나 GPS가 실행 중이 아니면 아무것도 하지 않음
-        if (currentMissionState == MissionState.InitializingGPS || 
-            GPSManager.Instance == null || 
+        if (currentMissionState == MissionState.InitializingGPS ||
+            GPSManager.Instance == null ||
             GPSManager.Instance.GetLocationStatus() != LocationServiceStatus.Running)
-        {
             return;
-        }
 
-        float currentLat = GPSManager.Instance.latitude;
-        float currentLon = GPSManager.Instance.longitude;
+        float lat = GPSManager.Instance.latitude;
+        float lon = GPSManager.Instance.longitude;
 
         switch (currentMissionState)
         {
-            case MissionState.Idle:
-                // 버튼 클릭 대기 중
-                break;
-
             case MissionState.GoToStartLocation:
-                HandleGoToStartLocation(currentLat, currentLon);
+                HandleGoToStartLocation(lat, lon);
                 break;
 
             case MissionState.DeliveryInProgress:
-                HandleDeliveryInProgress(currentLat, currentLon);
-                break;
-
-            case MissionState.MissionCompleted:
-                // 미션 완료 상태, 더 이상 업데이트 없음
+                HandleDeliveryInProgress(lat, lon);
                 break;
         }
     }
-
-    // --- 상태별 핸들러 ---
 
     private void HandleGoToStartLocation(float currentLat, float currentLon)
     {
@@ -128,118 +108,187 @@ public class MissionManager : MonoBehaviour
 
         if (distanceFromStart <= arrivalRadiusMeters)
         {
+            // 시작 지점 도달 → 도시락 이미지 ON + 토스트
+            if (mealImage != null) mealImage.gameObject.SetActive(true);
+            ShowPopup("미션 시작 지점에 도착했습니다!");
+
             SetMissionState(MissionState.DeliveryInProgress);
         }
         else
         {
-            statusText.text = $"배달 시작 지점(편의점)으로 이동하세요.\n남은 거리: {distanceFromStart:F2}m";
+            if (statusText != null)
+                statusText.text = $"배달 시작 지점(편의점)으로 이동하세요.\n남은 거리: {distanceFromStart:F2}m";
         }
     }
 
     private void HandleDeliveryInProgress(float currentLat, float currentLon)
     {
-        float remainingDistance = CalculateDistance(currentLat, currentLon, destinationCoords.x, destinationCoords.y);
+        float remaining = CalculateDistance(currentLat, currentLon, destinationCoords.x, destinationCoords.y);
 
-        if (remainingDistance <= arrivalRadiusMeters)
+        if (remaining <= arrivalRadiusMeters)
         {
+            // 목적지 도달 → 완료 토스트
+            ShowPopup("엽전 도시락 배달이 완료되었습니다!");
             SetMissionState(MissionState.MissionCompleted);
         }
         else
         {
-            float progressPercentage = 0f;
+            float progress01 = 0f;
             if (initialDeliveryDistance > 0)
-            {
-                progressPercentage = (initialDeliveryDistance - remainingDistance) / initialDeliveryDistance;
-            }
-            
-            if (remainingDistance > initialDeliveryDistance)
-            {
-                progressPercentage = 0f;
-            }
-            
-            progressBarSlider.value = Mathf.Clamp01(progressPercentage);
-            remainingDistanceText.text = $"남은 거리: {remainingDistance / 1000f:F2}km";
+                progress01 = Mathf.Clamp01((initialDeliveryDistance - remaining) / initialDeliveryDistance);
+            if (remaining > initialDeliveryDistance) progress01 = 0f;
 
-            statusText.text = $"배달 진행 중: {(progressBarSlider.value * 100):F0}%";
+            float percent100 = progress01 * 100f;
+
+            if (progressBar != null)
+            {
+                progressBar.currentValue = percent100;
+                progressBar.UpdateUI();
+            }
+
+            if (remainingDistanceText != null)
+                remainingDistanceText.text = $"남은 거리: {remaining / 1000f:F2}km";
+
+            if (statusText != null)
+                statusText.text = $"배달 진행 중: {(progress01 * 100f):F0}%";
         }
     }
 
-    // --- UI 업데이트 함수 ---
     private void UpdateUIForCurrentState()
     {
-        // 모든 UI 요소를 기본적으로 숨기거나 비활성화
-        startMissionButton.gameObject.SetActive(false);
-        progressBarSlider.gameObject.SetActive(false);
-        remainingDistanceText.gameObject.SetActive(false);
-        statusText.gameObject.SetActive(true); // 상태 텍스트는 항상 활성
+        if (progressBar != null) progressBar.gameObject.SetActive(false);
+        if (remainingDistanceText != null) remainingDistanceText.gameObject.SetActive(false);
+        if (statusText != null) statusText.gameObject.SetActive(true);
 
         switch (currentMissionState)
         {
             case MissionState.InitializingGPS:
-                // 텍스트는 CheckGpsAndStartGame 코루틴에서 설정
-                startMissionButton.interactable = false; // GPS 초기화 중에는 버튼 비활성화
+                if (startMissionButton != null) startMissionButton.interactable = false;
                 break;
 
             case MissionState.Idle:
-                startMissionButton.gameObject.SetActive(true);
-                startMissionButton.interactable = true; // 버튼 활성화
-                statusText.text = "GPS 준비 완료! 미션을 시작하려면 '배달 미션 시작' 버튼을 누르세요.";
+                if (statusText != null)
+                    statusText.text = "GPS 준비 완료! 미션을 시작하려면 '배달 미션 시작' 버튼을 누르세요.";
+                if (startMissionButton != null)
+                {
+                    startMissionButton.gameObject.SetActive(true);
+                    startMissionButton.interactable = true;
+                }
+                // 초기화
+                if (mealImage != null) mealImage.gameObject.SetActive(false);
+                HidePopupImmediate();
                 break;
 
             case MissionState.GoToStartLocation:
-                // 텍스트는 HandleGoToStartLocation에서 실시간 업데이트
-                startMissionButton.gameObject.SetActive(false);
+                if (startMissionButton != null) startMissionButton.gameObject.SetActive(false);
                 break;
 
             case MissionState.DeliveryInProgress:
-                statusText.text = $"배달이 시작됩니다. 거리는 {initialDeliveryDistance / 1000f:F2}km입니다.";
-                progressBarSlider.gameObject.SetActive(true);
-                remainingDistanceText.gameObject.SetActive(true);
-                progressBarSlider.value = 0; // 시작 시 0%로 초기화
+                if (statusText != null)
+                    statusText.text = $"배달이 시작됩니다. 거리는 {initialDeliveryDistance / 1000f:F2}km입니다.";
+                if (progressBar != null)
+                {
+                    progressBar.gameObject.SetActive(true);
+                    progressBar.currentValue = 0f;
+                    progressBar.UpdateUI();
+                }
+                if (remainingDistanceText != null) remainingDistanceText.gameObject.SetActive(true);
+                // mealImage는 켠 상태 유지
                 break;
 
             case MissionState.MissionCompleted:
-                statusText.text = "목적지에 도착했습니다!";
-                // progressBarSlider와 remainingDistanceText는 이미 비활성화
+                if (statusText != null) statusText.text = "목적지에 도착했습니다!";
+                // mealImage는 요구사항대로 유지 (원하면 여기서 끄면 됨)
                 break;
         }
     }
 
-    // --- 버튼 클릭 이벤트 ---
-    public void OnStartMissionButtonClick() // <<<< public으로 되어 있는지 다시 확인!
+    public void OnStartMissionButtonClick()
     {
         if (currentMissionState != MissionState.Idle)
         {
             Debug.LogWarning("미션은 Idle 상태에서만 시작할 수 있습니다.");
             return;
         }
-        
+
         SetMissionState(MissionState.GoToStartLocation);
         hasMissionStarted = true;
     }
 
-    // --- 상태 전환 함수 ---
     private void SetMissionState(MissionState newState)
     {
         currentMissionState = newState;
-        Debug.Log($"Mission State Changed to: {newState}");
 
         if (newState == MissionState.DeliveryInProgress)
         {
-            initialDeliveryDistance = CalculateDistance(startLocationCoords.x, startLocationCoords.y, destinationCoords.x, destinationCoords.y);
-            Debug.Log($"Initial Delivery Distance: {initialDeliveryDistance:F2} meters");
-            
-            if (initialDeliveryDistance < 1f) 
+            initialDeliveryDistance = CalculateDistance(
+                startLocationCoords.x, startLocationCoords.y,
+                destinationCoords.x,   destinationCoords.y);
+
+            if (initialDeliveryDistance < 1f)
             {
-                Debug.LogWarning("시작 지점과 목적지가 너무 가까워 즉시 완료 처리합니다.");
                 SetMissionState(MissionState.MissionCompleted);
                 return;
             }
         }
-        UpdateUIForCurrentState(); // 상태 전환 시 UI 업데이트
+
+        UpdateUIForCurrentState();
     }
 
-    // --- 거리 계산 (Haversine 공식) ---
+    // ───── Popup helpers ─────
+    void ShowPopup(string msg)
+    {
+        if (popupText == null) return;
+
+        if (popupCo != null) StopCoroutine(popupCo);
+        popupCo = StartCoroutine(CoShowPopup(msg));
+    }
+
+    IEnumerator CoShowPopup(string msg)
+    {
+        popupText.text = msg;
+        popupText.gameObject.SetActive(true);
+
+        // fade in
+        if (popupGroup != null)
+        {
+            float t = 0f;
+            while (t < popupFade)
+            {
+                t += Time.unscaledDeltaTime;
+                popupGroup.alpha = Mathf.Clamp01(t / popupFade);
+                yield return null;
+            }
+            popupGroup.alpha = 1f;
+        }
+
+        // hold
+        yield return new WaitForSecondsRealtime(popupDuration);
+
+        // fade out
+        if (popupGroup != null)
+        {
+            float t = 0f;
+            while (t < popupFade)
+            {
+                t += Time.unscaledDeltaTime;
+                popupGroup.alpha = 1f - Mathf.Clamp01(t / popupFade);
+                yield return null;
+            }
+            popupGroup.alpha = 0f;
+        }
+
+        popupText.gameObject.SetActive(false);
+    }
+
+    void HidePopupImmediate()
+    {
+        if (popupText != null) popupText.gameObject.SetActive(false);
+        if (popupGroup != null) popupGroup.alpha = 0f;
+        if (popupCo != null) { StopCoroutine(popupCo); popupCo = null; }
+    }
+
+    // ───── 거리 계산 ─────
     private float CalculateDistance(float lat1, float lon1, float lat2, float lon2)
     {
         float dLat = ToRadians(lat2 - lat1);
@@ -250,12 +299,8 @@ public class MissionManager : MonoBehaviour
                   Mathf.Sin(dLon / 2) * Mathf.Sin(dLon / 2);
 
         float c = 2 * Mathf.Atan2(Mathf.Sqrt(a), Mathf.Sqrt(1 - a));
-
         return EARTH_RADIUS_METERS * c;
     }
 
-    private float ToRadians(float deg)
-    {
-        return deg * Mathf.PI / 180f;
-    }
+    private float ToRadians(float deg) => deg * Mathf.PI / 180f;
 }

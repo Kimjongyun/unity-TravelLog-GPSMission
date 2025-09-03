@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 8f24eec0e91dbe749a769c988f36e3fc
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 158633
+  packageName: Antique Puzzle Box
+  packageVersion: 1.0
+  assetPath: Assets/Antique_Box/Antique_Box_Model/Model/Materials/Object.mat
+  uploadId: 341437
